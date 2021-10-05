@@ -78,4 +78,6 @@ while(flag):
 sheet1 = wb.add_sheet('Sheet 1')
 sheet1.write(1, 0, "weight")
 sheet1.write(2, 0, weight)
+sheet1.write(1, 1, "temp")
+sheet1.write(2, 1, temperature)
 wb.save(path)
