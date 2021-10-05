@@ -3,24 +3,34 @@
 #include <EthernetUdp.h> //Load the Udp Library
 #include <SPI.h> //Load SPI Library
 #include <HX711.h> // import the Pressure/Temperature sensor library
-HX711 mySensor; //Create a sensor object
+HX711 weight_sensor; //Create weight sensor object
+#include <OneWire.h> 
+#include <DallasTemperature.h>
+#define ONE_WIRE_BUS 10 
+OneWire oneWire(ONE_WIRE_BUS); 
+// Pass our oneWire reference to Dallas Temperature. 
+DallasTemperature temp_sensor(&oneWire);
  
-float tempC; //Declare variable for Temp in C
-float tempF; //Declare variable for Temp in F
-float Pressure; //Declare a variable for Pressure
+ 
 
-byte mac[] ={ 0xA8, 0x61, 0x0A, 0xAE, 0x84, 0x16}; //Assign mac address
-//IPAddress ip(10, 91, 120, 61); //Assign the IP Adress
-unsigned int localPort = 1900; // Assign a port to talk over
-char packetBuffer[UDP_TX_PACKET_MAX_SIZE]; //dimensian a char array to hold our data packet
+float weight; //Declare variable for weight
+float tempC; //Declare variable for temperature sensor
+
+
+byte mac[] ={0xA8, 0x61, 0x0A, 0xAE, 0x84, 0x16}; //Assign mac address, a specific code the network knows this machine as. Can actually be random, so long as its unique
+//IPAddress ip(x, x, x, x); //Assign the IP Adress only use if you need to hard cose the ip address in
+unsigned int localPort = 1900; // Assign a port to talk over (either this or port 5000)
+char packetBuffer[UDP_TX_PACKET_MAX_SIZE]; //dimmension a char array to hold our data packet
 String datReq; //String for our data
 int packetSize; //Size of the packet
 EthernetUDP Udp; // Create a UDP Object
  
-void setup() {
-  //DHCP setup
+void setup()
+{
+ 
+  //DHCP setup (ask the network for an ip address, and also a bunch of discretionary shit)--------------------------------------------------------------------
    // start serial port:
-  Serial.begin(9600);
+  Serial.begin(115200);
   // start the Ethernet connection:
   Serial.println("Initialize Ethernet with DHCP:");
   if (Ethernet.begin(mac) == 0) {
@@ -38,25 +48,32 @@ void setup() {
       Serial.println("Ethernet cable is not connected.");
     }
     // try to congifure using IP address instead of DHCP:
-//    Ethernet.begin(mac, ip); //Inialize the Ethernet WITHOUT DHCP (NOT PREFFERED)
+//    Ethernet.begin(mac, ip); //Inialize the Ethernet WITHOUT DHCP (NOT PREFFERED, in fact if you cant get this auto assigned it may screw you over..)
     Serial.print("My IP address: "); 
     Serial.println(Ethernet.localIP());
   } 
   else
   {
-    Serial.print("  DHCP assigned IP ");
-    Serial.println(Ethernet.localIP());
+    Serial.print("  DHCP assigned IP "); // yay, it was assigned a router to talk to on the network
+    Serial.println(Ethernet.localIP()); // local ip address our device was given. 
   }
-
-
-  Udp.begin(localPort); //Initialize Udp
+ 
+  //Initialize Udp------------------------------------------------------------------------------------------------------------------------------------------
+  Udp.begin(localPort); 
   delay(1500); //delay
-  mySensor.begin(A1, A0); //initialize pressure-temp sensor
+  
  
-}
- 
+ // Init weight sensor---------------------------------------------------------------------------
+
+  weight_sensor.begin(A1,A0);
+  weight_sensor.set_scale(2020.f);    // this value is obtained by calibrating the scale with known weights; see the README for details
+  weight_sensor.tare();               // reset the scale to 0
+
+}// END void SETUP
+
+
 void loop()
-{ //BEGIN VOID LOOP
+{ 
   
   packetSize =Udp.parsePacket(); //Reads the packet size
   
@@ -65,30 +82,28 @@ void loop()
     Udp.read(packetBuffer, UDP_TX_PACKET_MAX_SIZE); //Read the data request
     String datReq(packetBuffer); //Convert char array packetBuffer into a string called datReq
     
-    if (datReq =="Temperature"){ //Do the following if Temperature is requested
+    if (datReq =="weight"){ //Do the following if weight is requested
     
-      tempC = mySensor.read(); //Read the temperature
-      tempF = tempC*1.8 + 32; //Convert temp to F
+      weight = weight_sensor.get_units(); //Read the digital number reported by the sensor and divide by scale factor. can average readings over CLK cycles by specifying get_units(n)
+      weight = weight/1.5; // linear equation to retrieve real weight (empirically determined with a weight set, unique for each strain gauge)
+     
       
       Udp.beginPacket(Udp.remoteIP(), Udp.remotePort()); //Initialize packet send
-      Udp.print(tempF); //Send the temperature data
+      Udp.print(weight); //Send the weight data
       Udp.endPacket(); //End the packet
       
     }
-    /*
-    if (datReq== "Pressure") { //Do the following if Pressure is requested
     
-      Pressure=mySensor.readPressure(); //read the pressure
-      
+    if (datReq== "Temperature") { //Do the following if temperature is requested
+    
+        tempC=temp_sensor.requestTemperatures(); //read the temperature
         Udp.beginPacket(Udp.remoteIP(), Udp.remotePort()); //Initialize packet send
         Udp.print(Pressure); //Send the Pressure data
         Udp.endPacket(); //End the packet
         
-    }*/
+    }
       
   }
   memset(packetBuffer, 0, UDP_TX_PACKET_MAX_SIZE); //clear out the packetBuffer array
-  //tempC = mySensor.read();
-  //Serial.println(tempC);
   
 }//end void LOOP
