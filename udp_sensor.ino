@@ -3,11 +3,15 @@
 #include <EthernetUdp.h> //Load the Udp Library
 #include <SPI.h> //Load SPI Library
 #include <HX711.h> // import the Pressure/Temperature sensor library
+
 HX711 weight_sensor; //Create weight sensor object
- 
+
 
 float weight; //Declare variable for weight
 float tempC; //Declare variable for temperature sensor
+
+const int CLK_pin = A0;
+const int DAT_pin = A1;
 
 
 byte mac[] ={0xA8, 0x61, 0x0A, 0xAE, 0x84, 0x16}; //Assign mac address, a specific code the network knows this machine as. Can actually be random, so long as its unique
@@ -58,7 +62,7 @@ void setup()
  
  // Init weight sensor---------------------------------------------------------------------------
 
-  weight_sensor.begin(A1,A0);
+  weight_sensor.begin(DAT_pin,CLK_pin);
   weight_sensor.set_scale(2020.f);    // this value is obtained by calibrating the scale with known weights; see the README for details
   weight_sensor.tare();               // reset the scale to 0
 
@@ -69,25 +73,23 @@ void loop()
 { 
   
   packetSize =Udp.parsePacket(); //Reads the packet size
-  
   if(packetSize>0) { //if packetSize is >0, that means someone has sent a request
     
     Udp.read(packetBuffer, UDP_TX_PACKET_MAX_SIZE); //Read the data request
     String datReq(packetBuffer); //Convert char array packetBuffer into a string called datReq
     
-    if (datReq =="weight"){ //Do the following if weight is requested
+    if (datReq =="req"){ //Do the following if weight is requested
     
       weight = weight_sensor.get_units(); //Read the digital number reported by the sensor and divide by scale factor. can average readings over CLK cycles by specifying get_units(n)
       weight = weight/1.5; // linear equation to retrieve real weight (empirically determined with a weight set, unique for each strain gauge)
-     
-      
       Udp.beginPacket(Udp.remoteIP(), Udp.remotePort()); //Initialize packet send
       Udp.print(weight); //Send the weight data
       Udp.endPacket(); //End the packet
       
     }
+
     /*
-    if (datReq== "Pressure") { //Do the following if Pressure is requested
+    if (datReq== "Temperature") { //Do the following if Pressure is requested
     
        tempC=temp_sensor.read(); //read the pressure
       
